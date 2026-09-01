@@ -320,7 +320,9 @@ class ArgbApp:
             cfg["color"] = hex_to_rgb(self.global_color)
 
         payload = json.dumps(cfg)
-        ui.notify("Waiting for authentication...", type="ongoing")
+        waiting = ui.notification(
+            "Waiting for authentication...", type="ongoing", spinner=True, timeout=None
+        )
 
         try:
             result = await run.io_bound(
@@ -329,11 +331,13 @@ class ArgbApp:
                 capture_output=True,
                 text=True,
             )
+            waiting.dismiss()
             if result.returncode == 0:
                 ui.notify("Applied successfully.", type="positive")
             else:
                 ui.notify(f"Failed: {result.stderr.strip()[:300]}", type="negative")
         except FileNotFoundError:
+            waiting.dismiss()
             ui.notify("pkexec not found. Install polkit to use Apply.", type="negative")
 
     # ---- module path ----
