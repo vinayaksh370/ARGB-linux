@@ -95,6 +95,9 @@ class ArgbApp:
 
         self.path_label = None
         self.profile_select = None
+        self.mode_select = None
+        self.brightness_slider = None
+        self._loading_profile = False
 
     # ---- derived state ----
 
@@ -140,21 +143,29 @@ class ArgbApp:
     def _build_mode_card(self):
         with ui.card().classes("w-full").style(f"background-color: {PANEL}"):
             ui.label("Mode & Brightness").classes("text-sm font-semibold opacity-70")
-            ui.select(
+            self.mode_select = ui.select(
                 options=list(MODES.keys()), value=self.mode, on_change=self._on_mode_change
             ).classes("w-full").props("outlined dense")
             ui.label("Brightness").classes("text-xs opacity-60 mt-2")
-            ui.slider(min=0, max=100, value=self.brightness, on_change=self._on_brightness_change).props(
-                "label-always"
-            )
+            self.brightness_slider = ui.slider(
+                min=0, max=100, value=self.brightness, on_change=self._on_brightness_change
+            ).props("label-always")
+
+    def _clear_profile_selection(self):
+        if self._loading_profile:
+            return
+        if self.profile_select is not None and self.profile_select.value is not None:
+            self.profile_select.value = None
 
     def _on_mode_change(self, e):
         self.mode = e.value
+        self._clear_profile_selection()
         self.zones_section.refresh()
         self.anim_section.refresh()
 
     def _on_brightness_change(self, e):
         self.brightness = int(e.value)
+        self._clear_profile_selection()
 
     @ui.refreshable
     def zones_section(self):
@@ -185,13 +196,16 @@ class ArgbApp:
         self.same_color = e.value
         if self.same_color:
             self.zone_colors = [self.zone_colors[0]] * 4
+        self._clear_profile_selection()
         self.zones_section.refresh()
 
     def _set_all_zone_colors(self, e):
         self.zone_colors = [e.value] * 4
+        self._clear_profile_selection()
 
     def _set_zone_color(self, i, value):
         self.zone_colors[i] = value
+        self._clear_profile_selection()
 
     @ui.refreshable
     def anim_section(self):
@@ -219,12 +233,15 @@ class ArgbApp:
 
     def _set_global_color(self, e):
         self.global_color = e.value
+        self._clear_profile_selection()
 
     def _on_speed_change(self, e):
         self.speed = int(e.value)
+        self._clear_profile_selection()
 
     def _on_direction_change(self, e):
         self.direction = e.value
+        self._clear_profile_selection()
 
     def _build_profiles_card(self):
         with ui.card().classes("w-full").style(f"background-color: {PANEL}"):
@@ -269,15 +286,21 @@ class ArgbApp:
         settings = self.profiles.get(name)
         if not settings:
             return
-        self.zone_colors = settings.get("zone_colors", [DEFAULT_ZONE_COLOR] * 4)
-        self.global_color = settings.get("global_color", DEFAULT_ZONE_COLOR)
-        self.same_color = settings.get("same_color", True)
-        self.mode = settings.get("mode", "Static Color")
-        self.brightness = settings.get("brightness", 100)
-        self.speed = settings.get("speed", 4)
-        self.direction = settings.get("direction", 1)
-        self.zones_section.refresh()
-        self.anim_section.refresh()
+        self._loading_profile = True
+        try:
+            self.zone_colors = settings.get("zone_colors", [DEFAULT_ZONE_COLOR] * 4)
+            self.global_color = settings.get("global_color", DEFAULT_ZONE_COLOR)
+            self.same_color = settings.get("same_color", True)
+            self.mode = settings.get("mode", "Static Color")
+            self.brightness = settings.get("brightness", 100)
+            self.speed = settings.get("speed", 4)
+            self.direction = settings.get("direction", 1)
+            self.mode_select.value = self.mode
+            self.brightness_slider.value = self.brightness
+            self.zones_section.refresh()
+            self.anim_section.refresh()
+        finally:
+            self._loading_profile = False
         ui.notify(f"Loaded profile '{name}'.")
 
     def _delete_profile(self):
