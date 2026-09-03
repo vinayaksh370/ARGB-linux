@@ -42,7 +42,6 @@ MODE_CONTROLS = {
 }
 
 DEFAULT_ZONE_COLOR = "#de9aed"
-# ACCENT = "#de9aed"
 ACCENT = "#bacdf7"
 BG = "#131318"
 PANEL = "#1c1c24"
@@ -102,7 +101,13 @@ class ArgbApp:
         self.same_circle = None
         self.zone_circles = []
         self.global_circle = None
-        
+
+        # profile editing state — kept fully separate from profile_select's
+        # visual value so that editing settings never has to fight with the
+        # dropdown's on_change handler.
+        self.editing_profile_name = None
+        self.profile_dirty = False
+        self.update_profile_btn = None
 
     # ---- derived state ----
 
@@ -156,21 +161,33 @@ class ArgbApp:
                 min=0, max=100, value=self.brightness, on_change=self._on_brightness_change
             ).props("label-always")
 
-    def _clear_profile_selection(self):
+    # ---- dirty tracking (replaces the old profile_select-clearing approach) ----
+
+    def _mark_dirty(self):
         if self._loading_profile:
             return
-        if self.profile_select is not None and self.profile_select.value is not None:
-            self.profile_select.value = None
+        self.profile_dirty = True
+        self._refresh_update_button()
+
+    def _refresh_update_button(self):
+        if self.update_profile_btn is None:
+            return
+        if self.editing_profile_name:
+            suffix = " *" if self.profile_dirty else ""
+            self.update_profile_btn.text = f"Update{suffix}"
+            self.update_profile_btn.set_visibility(True)
+        else:
+            self.update_profile_btn.set_visibility(False)
 
     def _on_mode_change(self, e):
         self.mode = e.value
-        self._clear_profile_selection()
+        self._mark_dirty()
         self.zones_section.refresh()
         self.anim_section.refresh()
 
     def _on_brightness_change(self, e):
         self.brightness = int(e.value)
-        self._clear_profile_selection()
+        self._mark_dirty()
 
     @ui.refreshable
     def zones_section(self):
@@ -207,18 +224,18 @@ class ArgbApp:
         self.same_color = e.value
         if self.same_color:
             self.zone_colors = [self.zone_colors[0]] * 4
-        self._clear_profile_selection()
+        self._mark_dirty()
         self.zones_section.refresh()
 
     def _set_all_zone_colors(self, e):
         self.zone_colors = [e.value] * 4
-        self._clear_profile_selection()
+        self._mark_dirty()
         if self.same_circle is not None:
             self.same_circle.style(f"background-color: {e.value}")
 
     def _set_zone_color(self, i, value):
         self.zone_colors[i] = value
-        self._clear_profile_selection()
+        self._mark_dirty()
         if i < len(self.zone_circles):
             self.zone_circles[i].style(f"background-color: {value}")
 
@@ -234,7 +251,7 @@ class ArgbApp:
                     self.global_circle = self._zone_circle(self.global_color)
                     ui.color_input(
                         "Color", value=self.global_color, on_change=self._set_global_color
-                    ).classes("flex-1")            
+                    ).classes("flex-1")
             if controls["speed"]:
                 ui.label("Speed").classes("text-xs opacity-60")
                 ui.slider(min=0, max=9, value=self.speed, on_change=self._on_speed_change).props(
@@ -250,17 +267,17 @@ class ArgbApp:
 
     def _set_global_color(self, e):
         self.global_color = e.value
-        self._clear_profile_selection()
+        self._mark_dirty()
         if self.global_circle is not None:
             self.global_circle.style(f"background-color: {e.value}")
 
     def _on_speed_change(self, e):
         self.speed = int(e.value)
-        self._clear_profile_selection()
+        self._mark_dirty()
 
     def _on_direction_change(self, e):
         self.direction = e.value
-        self._clear_profile_selection()
+        self._mark_dirty()
 
     def _build_profiles_card(self):
         with ui.card().classes("w-full").style(f"background-color: {PANEL}"):
@@ -270,6 +287,8 @@ class ArgbApp:
                     options=list(self.profiles.keys()), on_change=self._on_profile_selected
                 ).classes("flex-1").props("outlined dense")
                 ui.button("Save As...", on_click=self._save_profile_dialog).props("flat")
+                self.update_profile_btn = ui.button("Update", on_click=self._update_profile).props("flat")
+                self.update_profile_btn.set_visibility(False)
                 ui.button("Delete", on_click=self._delete_profile).props("flat color=negative")
 
     def _current_settings(self):
@@ -308,6 +327,11 @@ class ArgbApp:
 
     def _on_profile_selected(self, e):
         name = e.value
+        if name is None:
+            self.editing_profile_name = None
+            self.profile_dirty = False
+            self._refresh_update_button()
+            return
         settings = self.profiles.get(name)
         if not settings:
             return
@@ -326,7 +350,20 @@ class ArgbApp:
             self.anim_section.refresh()
         finally:
             self._loading_profile = False
+        self.editing_profile_name = name
+        self.profile_dirty = False
+        self._refresh_update_button()
         ui.notify(f"Loaded profile '{name}'.")
+
+    def _update_profile(self):
+        name = self.editing_profile_name
+        if not name or name not in self.profiles:
+            return
+        self.profiles[name] = self._current_settings()
+        save_json(PROFILES_FILE, self.profiles)
+        self.profile_dirty = False
+        self._refresh_update_button()
+        ui.notify(f"Updated profile '{name}'.", type="positive")
 
     def _delete_profile(self):
         name = self.profile_select.value
@@ -339,7 +376,7 @@ class ArgbApp:
             ui.notify(f"Deleted profile '{name}'.")
 
     def _build_apply_row(self):
-        ui.button("Apply", on_click=self.apply).classes("w-full").props(f'color=primary size=lg')
+        ui.button("Apply", on_click=self.apply).classes("w-full").props("color=primary size=lg")
 
     async def apply(self):
         script = self.facer_script_path()
@@ -411,12 +448,12 @@ class ArgbApp:
         path = await dialog
         if path:
             self._set_module_path(path)
-     
-    # --- set module path ---
+
     def _set_module_path(self, path):
         self.config_data["module_path"] = path
         save_json(CONFIG_FILE, self.config_data)
         self.path_label.set_text(self._module_path_display())
+
 
 argb = ArgbApp()
 argb.build()
