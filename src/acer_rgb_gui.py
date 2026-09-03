@@ -101,6 +101,7 @@ class ArgbApp:
         self._loading_profile = False
         self.same_circle = None
         self.zone_circles = []
+        self.global_circle = None
         
 
     # ---- derived state ----
@@ -229,9 +230,11 @@ class ArgbApp:
         with ui.card().classes("w-full gap-3").style(f"background-color: {PANEL}"):
             ui.label("Color & Animation").classes("text-sm font-semibold opacity-70")
             if controls["color"]:
-                ui.color_input("Color", value=self.global_color, on_change=self._set_global_color).classes(
-                    "w-full"
-                )
+                with ui.row().classes("items-center gap-2 w-full"):
+                    self.global_circle = self._zone_circle(self.global_color)
+                    ui.color_input(
+                        "Color", value=self.global_color, on_change=self._set_global_color
+                    ).classes("flex-1")            
             if controls["speed"]:
                 ui.label("Speed").classes("text-xs opacity-60")
                 ui.slider(min=0, max=9, value=self.speed, on_change=self._on_speed_change).props(
@@ -248,6 +251,8 @@ class ArgbApp:
     def _set_global_color(self, e):
         self.global_color = e.value
         self._clear_profile_selection()
+        if self.global_circle is not None:
+            self.global_circle.style(f"background-color: {e.value}")
 
     def _on_speed_change(self, e):
         self.speed = int(e.value)
