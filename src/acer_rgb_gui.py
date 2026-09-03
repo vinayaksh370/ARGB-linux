@@ -42,7 +42,8 @@ MODE_CONTROLS = {
 }
 
 DEFAULT_ZONE_COLOR = "#de9aed"
-ACCENT = "#de9aed"
+# ACCENT = "#de9aed"
+ACCENT = "#bacdf7"
 BG = "#131318"
 PANEL = "#1c1c24"
 
@@ -98,6 +99,9 @@ class ArgbApp:
         self.mode_select = None
         self.brightness_slider = None
         self._loading_profile = False
+        self.same_circle = None
+        self.zone_circles = []
+        
 
     # ---- derived state ----
 
@@ -180,17 +184,23 @@ class ArgbApp:
                     on_change=self._on_same_color_toggle,
                 )
             if self.same_color:
-                ui.color_input(
-                    "All zones", value=self.zone_colors[0], on_change=self._set_all_zone_colors
-                ).classes("w-full")
+                with ui.row().classes("items-center gap-2 w-full"):
+                    self.same_circle = self._zone_circle(self.zone_colors[0])
+                    ui.color_input(
+                        "All zones", value=self.zone_colors[0], on_change=self._set_all_zone_colors
+                    ).classes("flex-1")
             else:
+                self.zone_circles = []
                 with ui.row().classes("w-full gap-2 flex-wrap"):
                     for i in range(4):
-                        ui.color_input(
-                            f"Zone {i + 1}",
-                            value=self.zone_colors[i],
-                            on_change=lambda e, i=i: self._set_zone_color(i, e.value),
-                        ).classes("flex-1 min-w-[100px]")
+                        with ui.row().classes("items-center gap-2 flex-1 min-w-[120px]"):
+                            circle = self._zone_circle(self.zone_colors[i])
+                            self.zone_circles.append(circle)
+                            ui.color_input(
+                                f"Zone {i + 1}",
+                                value=self.zone_colors[i],
+                                on_change=lambda e, i=i: self._set_zone_color(i, e.value),
+                            ).classes("flex-1")
 
     def _on_same_color_toggle(self, e):
         self.same_color = e.value
@@ -202,10 +212,14 @@ class ArgbApp:
     def _set_all_zone_colors(self, e):
         self.zone_colors = [e.value] * 4
         self._clear_profile_selection()
+        if self.same_circle is not None:
+            self.same_circle.style(f"background-color: {e.value}")
 
     def _set_zone_color(self, i, value):
         self.zone_colors[i] = value
         self._clear_profile_selection()
+        if i < len(self.zone_circles):
+            self.zone_circles[i].style(f"background-color: {value}")
 
     @ui.refreshable
     def anim_section(self):
@@ -263,6 +277,12 @@ class ArgbApp:
             "speed": self.speed,
             "direction": self.direction,
         }
+
+    def _zone_circle(self, color):
+        return ui.element("div").style(
+            f"width: 20px; height: 20px; border-radius: 50%; background-color: {color}; "
+            "border: 1px solid rgba(255,255,255,0.3); flex-shrink: 0;"
+        )
 
     async def _save_profile_dialog(self):
         with ui.dialog() as dialog, ui.card():
