@@ -8,6 +8,7 @@ A simple GUI for controlling 4-zone RGB keyboard lighting on Acer Nitro/Predator
 <p align="center">
   <img src="assets/images/authenticating.png" width="85%" alt="ARGB authentication prompt">
 </p>
+
 ## Features
 
 - Control all 6 lighting modes: Static, Breath, Neon, Wave, Shifting, Zoom
@@ -72,4 +73,5 @@ This folder isn't touched by install or uninstall (unless you say yes to the uni
 
 ## License
 
-TBD — pick a license (e.g. [MIT](https://choosealicense.com/licenses/mit/)) and drop the corresponding `LICENSE` file in the repo root; happy to fill this section in once you've decided.
+Standerd MIT License
+[MIT](LICENSE)
