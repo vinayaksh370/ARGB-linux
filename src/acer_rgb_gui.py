@@ -47,10 +47,17 @@ BG = "#131318"
 PANEL = "#1c1c24"
 SIDEBAR = "#17171d"
 SIDEBAR_ACTIVE = "rgba(186, 205, 247, 0.15)"
+FG = "#e4e4e7"
+BTN_BG = "#26262f"
 
 ICON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "icon", "pogos.png")
 
 TABS = ["RGB Editor", "Info"]
+
+TOOLBAR_BTN_STYLE = (
+    f"background-color: {BTN_BG}; color: {FG}; border-radius: 6px; "
+    "padding: 6px 18px; font-weight: 500;"
+)
 
 
 def load_json(path, default):
@@ -101,6 +108,7 @@ class ArgbApp:
 
         self.path_label = None
         self.profile_select = None
+        self.save_btn = None
         self.mode_select = None
         self.brightness_slider = None
         self._loading_profile = False
@@ -108,10 +116,17 @@ class ArgbApp:
         self.zone_circles = []
         self.global_circle = None
 
-        # Tracks which saved profile the current field text originated from,
-        # so that editing the name in place and clicking Save renames it
-        # (removes the old key) instead of creating a duplicate entry.
+        # Live text of the profile field, updated on every keystroke via the
+        # 'input-value' event (separate from Quasar's model-value, which only
+        # commits on Enter/blur for combobox-style selects). Save always
+        # reads this, so it never misses freshly typed text.
+        self.profile_name_text = ""
+
+        # Tracks which saved profile the field started from, so editing the
+        # name and clicking Save renames (removes old key) instead of
+        # creating a duplicate.
         self.loaded_profile_name = None
+        self.profile_dirty = False
 
         self.active_tab = "RGB Editor"
         self.sidebar_buttons = {}
@@ -163,15 +178,29 @@ class ArgbApp:
             "w-full items-center gap-3 px-6 py-2 border-b border-white/10"
         ).style(f"background-color: {PANEL}"):
             ui.label("Profile:").classes("text-sm opacity-70")
-            self.profile_select = ui.select(
-                options=list(self.profiles.keys()), with_input=True, on_change=self._on_profile_change
-            ).classes("w-56").props(
-                "outlined dense use-input fill-input hide-selected input-debounce=0 "
-                'new-value-mode="add-unique"'
+            self.profile_select = (
+                ui.select(
+                    options=list(self.profiles.keys()),
+                    with_input=True,
+                    on_change=self._on_profile_change,
+                )
+                .classes("w-56")
+                .props(
+                    "outlined dense use-input fill-input hide-selected input-debounce=0 "
+                    'new-value-mode="add-unique"'
+                )
             )
-            ui.button("Apply", on_click=self.apply).props("unelevated color=primary dense")
-            ui.button("Save", on_click=self.save_profile).props("flat dense")
-            ui.button("Delete", on_click=self.delete_profile).props("flat dense color=negative")
+            # Live keystroke capture — fires on every character typed,
+            # unlike update:model-value which only commits on Enter/blur.
+            self.profile_select.on("input-value", self._on_profile_input_value)
+
+            self.save_btn = ui.button("Save", on_click=self.save_profile).style(TOOLBAR_BTN_STYLE).props(
+                "flat dense no-caps"
+            )
+            ui.button("Apply", on_click=self.apply).style(TOOLBAR_BTN_STYLE).props("flat dense no-caps")
+            ui.button("Delete", on_click=self.delete_profile).style(TOOLBAR_BTN_STYLE).props(
+                "flat dense no-caps"
+            )
 
     def _build_sidebar(self):
         with ui.column().classes("gap-1 p-3 w-48 border-r border-white/10").style(
@@ -223,13 +252,28 @@ class ArgbApp:
                 min=0, max=100, value=self.brightness, on_change=self._on_brightness_change
             ).props("label-always")
 
+    # ---- dirty tracking ----
+
+    def _mark_dirty(self):
+        if self._loading_profile:
+            return
+        self.profile_dirty = True
+        self._refresh_save_label()
+
+    def _refresh_save_label(self):
+        if self.save_btn is None:
+            return
+        self.save_btn.text = "Save *" if self.profile_dirty else "Save"
+
     def _on_mode_change(self, e):
         self.mode = e.value
+        self._mark_dirty()
         self.zones_section.refresh()
         self.anim_section.refresh()
 
     def _on_brightness_change(self, e):
         self.brightness = int(e.value)
+        self._mark_dirty()
 
     @ui.refreshable
     def zones_section(self):
@@ -266,15 +310,18 @@ class ArgbApp:
         self.same_color = e.value
         if self.same_color:
             self.zone_colors = [self.zone_colors[0]] * 4
+        self._mark_dirty()
         self.zones_section.refresh()
 
     def _set_all_zone_colors(self, e):
         self.zone_colors = [e.value] * 4
+        self._mark_dirty()
         if self.same_circle is not None:
             self.same_circle.style(f"background-color: {e.value}")
 
     def _set_zone_color(self, i, value):
         self.zone_colors[i] = value
+        self._mark_dirty()
         if i < len(self.zone_circles):
             self.zone_circles[i].style(f"background-color: {value}")
 
@@ -306,14 +353,17 @@ class ArgbApp:
 
     def _set_global_color(self, e):
         self.global_color = e.value
+        self._mark_dirty()
         if self.global_circle is not None:
             self.global_circle.style(f"background-color: {e.value}")
 
     def _on_speed_change(self, e):
         self.speed = int(e.value)
+        self._mark_dirty()
 
     def _on_direction_change(self, e):
         self.direction = e.value
+        self._mark_dirty()
 
     # ---- profiles ----
 
@@ -334,11 +384,17 @@ class ArgbApp:
             "border: 1px solid rgba(255,255,255,0.3); flex-shrink: 0;"
         )
 
+    def _on_profile_input_value(self, e):
+        # Fires on every keystroke in the profile field.
+        self.profile_name_text = e.args if isinstance(e.args, str) else (e.args or [""])[0]
+        self._mark_dirty()
+
     def _on_profile_change(self, e):
         name = e.value
-        # Only treat this as "loading a profile" if it's an existing, DIFFERENT
-        # saved name. Free typing (renaming in place) shouldn't reload settings
-        # or lose track of which profile we started editing from.
+        self.profile_name_text = name or ""
+        # Only treat this as "loading a profile" if it's an existing,
+        # DIFFERENT saved name — free typing shouldn't reload settings or
+        # lose track of which profile we started editing from.
         if name and name in self.profiles and name != self.loaded_profile_name:
             settings = self.profiles[name]
             self._loading_profile = True
@@ -357,10 +413,12 @@ class ArgbApp:
             finally:
                 self._loading_profile = False
             self.loaded_profile_name = name
+            self.profile_dirty = False
+            self._refresh_save_label()
             ui.notify(f"Loaded profile '{name}'.")
 
     def save_profile(self):
-        name = (self.profile_select.value or "").strip()
+        name = (self.profile_name_text or self.profile_select.value or "").strip()
         if not name:
             ui.notify("Type a profile name first.", type="negative")
             return
@@ -371,13 +429,15 @@ class ArgbApp:
         self.profiles[name] = self._current_settings()
         save_json(PROFILES_FILE, self.profiles)
         self.loaded_profile_name = name
+        self.profile_dirty = False
+        self._refresh_save_label()
         self.profile_select.options = list(self.profiles.keys())
         self.profile_select.value = name
         self.profile_select.update()
         ui.notify(f"Saved profile '{name}'.", type="positive")
 
     def delete_profile(self):
-        name = (self.profile_select.value or "").strip()
+        name = (self.profile_name_text or self.profile_select.value or "").strip()
         if name not in self.profiles and self.loaded_profile_name in self.profiles:
             name = self.loaded_profile_name
         if name in self.profiles:
@@ -387,6 +447,9 @@ class ArgbApp:
             self.profile_select.value = None
             self.profile_select.update()
             self.loaded_profile_name = None
+            self.profile_name_text = ""
+            self.profile_dirty = False
+            self._refresh_save_label()
             ui.notify(f"Deleted profile '{name}'.")
         else:
             ui.notify("No matching profile to delete.", type="negative")
