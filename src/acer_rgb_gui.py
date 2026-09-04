@@ -46,6 +46,8 @@ ACCENT = "#bacdf7"
 BG = "#131318"
 PANEL = "#1c1c24"
 
+ICON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "icon", "pogos.png")
+
 
 def load_json(path, default):
     try:
@@ -137,8 +139,9 @@ class ArgbApp:
         with ui.header().classes(
             "items-center justify-between px-6 py-3 border-b border-white/10 shadow-lg"
         ).style(f"background-color: {PANEL}"):
-            ui.image("assets/icon/pogos.png").classes("w-8 h-8 rounded")
-            ui.label("ARGB").classes("text-2xl font-bold tracking-wide")
+            with ui.row().classes("items-center gap-3"):
+                ui.image(ICON_PATH).classes("w-8 h-8 rounded")
+                ui.label("ARGB").classes("text-2xl font-bold tracking-wide")
             with ui.row().classes("items-center gap-3"):
                 self.path_label = ui.label(self._module_path_display()).classes(
                     "text-xs opacity-60 max-w-xs truncate"
@@ -468,5 +471,5 @@ if __name__ in {"__main__", "__mp_main__"}:
         reload=False,
         show=True,
         dark=True,
-        favicon="assets/icon/pogos.png"
+        favicon=ICON_PATH,
     )
