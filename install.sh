@@ -2,6 +2,7 @@
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_DIR="$SCRIPT_DIR/src"
+ICON_PATH="$SCRIPT_DIR/assets/icon/pogos.png"
 APP_DIR="$HOME/.local/share/applications"
 DESKTOP_FILE="$APP_DIR/argb.desktop"
 
@@ -56,7 +57,7 @@ Type=Application
 Name=ARGB
 Comment=Control 4-zone RGB keyboard lighting on Acer Nitro/Predator laptops
 Exec=python3 "$SRC_DIR/acer_rgb_gui.py"
-Icon=input-keyboard
+Icon=$ICON_PATH
 Terminal=false
 Categories=Utility;HardwareSettings;Settings;
 StartupNotify=true

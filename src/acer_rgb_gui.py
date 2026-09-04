@@ -137,6 +137,7 @@ class ArgbApp:
         with ui.header().classes(
             "items-center justify-between px-6 py-3 border-b border-white/10 shadow-lg"
         ).style(f"background-color: {PANEL}"):
+            ui.image("assets/icon/pogos.png").classes("w-8 h-8 rounded")
             ui.label("ARGB").classes("text-2xl font-bold tracking-wide")
             with ui.row().classes("items-center gap-3"):
                 self.path_label = ui.label(self._module_path_display()).classes(
@@ -467,5 +468,5 @@ if __name__ in {"__main__", "__mp_main__"}:
         reload=False,
         show=True,
         dark=True,
-        favicon="\U0001f4a1",
+        favicon="assets/icon/pogos.png"
     )
