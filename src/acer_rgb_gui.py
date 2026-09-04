@@ -222,12 +222,26 @@ class ArgbApp:
         else:
             self._build_info_panel()
 
+    # def _build_info_panel(self):
+    #     with ui.card().classes("w-full").style(f"background-color: {PANEL}"):
+    #         ui.label("Info").classes("text-sm font-semibold opacity-70")
+    #         ui.label(
+    #             "Add usage notes, troubleshooting tips, or anything else here."
+    #         ).classes("text-sm opacity-50 mt-2")
+
     def _build_info_panel(self):
         with ui.card().classes("w-full").style(f"background-color: {PANEL}"):
             ui.label("Info").classes("text-sm font-semibold opacity-70")
-            ui.label(
-                "Add usage notes, troubleshooting tips, or anything else here."
-            ).classes("text-sm opacity-50 mt-2")
+            ui.markdown(
+                "**Requires:** the "
+                "[acer-predator-turbo-and-rgb-keyboard-linux-module](https://github.com/JafarAkhondali/acer-predator-turbo-and-rgb-keyboard-linux-module) "
+                "installed on your system. Point ARGB at that folder using **Change folder** at the top.\n\n"
+                "**Config & profiles:** stored at `~/.config/argb/`.\n\n"
+                "**Profiles:** name it, hit **Save**, and it's available from the dropdown menu next time. "
+                "Editing settings after loading a profile marks it with `*` until you save again.\n\n"
+                "**Apply:** changing your keyboard's lighting needs root access, so you'll be asked for your "
+                "password each time you click **Apply**."
+            ).classes("text-sm opacity-80 leading-relaxed")
 
     def _build_mode_card(self):
         with ui.card().classes("w-full").style(f"background-color: {PANEL}"):
