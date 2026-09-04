@@ -1,4 +1,4 @@
-# <img src="assets/icon/pogos.png" width="40" height="40" align="middle" alt="ARGB icon"> ARGB
+# <img src="assets/icon/pogos.png" width="40" height="40" align="top" alt="ARGB icon"> ARGB
 
 A simple GUI for controlling 4-zone RGB keyboard lighting on Acer Nitro/Predator laptops [FOR LINUX], built on top of the [acer-predator-turbo-and-rgb-keyboard-linux-module](https://github.com/JafarAkhondali/acer-predator-turbo-and-rgb-keyboard-linux-module).
 
