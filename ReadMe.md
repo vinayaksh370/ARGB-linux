@@ -1,12 +1,13 @@
-# <img src="assets/icon/pogos.png" width="32" height="32" align="center" alt="ARGB icon"> ARGB
+# <img src="assets/icon/pogos.png" width="40" height="40" align="middle" alt="ARGB icon"> ARGB
 
 A simple GUI for controlling 4-zone RGB keyboard lighting on Acer Nitro/Predator laptops [FOR LINUX], built on top of the [acer-predator-turbo-and-rgb-keyboard-linux-module](https://github.com/JafarAkhondali/acer-predator-turbo-and-rgb-keyboard-linux-module).
 
 <p align="center">
-  <img src="assets/images/looks.png" width="45%" alt="ARGB main window">
-  <img src="assets/images/authenticating.png" width="45%" alt="ARGB authentication prompt">
+  <img src="assets/images/looks.png" width="85%" alt="ARGB main window">
 </p>
-
+<p align="center">
+  <img src="assets/images/authenticating.png" width="85%" alt="ARGB authentication prompt">
+</p>
 ## Features
 
 - Control all 6 lighting modes: Static, Breath, Neon, Wave, Shifting, Zoom
@@ -18,7 +19,7 @@ A simple GUI for controlling 4-zone RGB keyboard lighting on Acer Nitro/Predator
 
 ## Requirements
 
-- **[acer-predator-turbo-and-rgb-keyboard-linux-module](https://github.com/JafarAkhondali/acer-predator-turbo-and-rgb-keyboard-linux-module)** — ARGB is a GUI front end for this module, it doesn't replace it. Install it first following that repo's instructions, **then reboot** before using ARGB. In my own testing, the module didn't reliably control the keyboard until after a reboot post-install — worth doing even if it seems to work right away.
+- **[acer-predator-turbo-and-rgb-keyboard-linux-module](https://github.com/JafarAkhondali/acer-predator-turbo-and-rgb-keyboard-linux-module)** — ARGB is a GUI front end for this module, it doesn't replace it. Install it first following that repo's instructions, **then reboot** before using ARGB. In my own testing, the module didn't reliably control the keyboard until after a reboot post-install — worth doing even if it seems to work right away. Also install the version which will work after rebbot [read the repo]
 - **Python 3**
 - **[NiceGUI](https://nicegui.io/)** — `pip install nicegui --break-system-packages`
 - **polkit** (`pkexec`) — required to apply changes, since talking to the keyboard needs root
