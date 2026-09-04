@@ -45,8 +45,12 @@ DEFAULT_ZONE_COLOR = "#de9aed"
 ACCENT = "#bacdf7"
 BG = "#131318"
 PANEL = "#1c1c24"
+SIDEBAR = "#17171d"
+SIDEBAR_ACTIVE = "rgba(186, 205, 247, 0.15)"
 
 ICON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "icon", "pogos.png")
+
+TABS = ["RGB Editor", "Info"]
 
 
 def load_json(path, default):
@@ -104,12 +108,13 @@ class ArgbApp:
         self.zone_circles = []
         self.global_circle = None
 
-        # profile editing state — kept fully separate from profile_select's
-        # visual value so that editing settings never has to fight with the
-        # dropdown's on_change handler.
-        self.editing_profile_name = None
-        self.profile_dirty = False
-        self.update_profile_btn = None
+        # Tracks which saved profile the current field text originated from,
+        # so that editing the name in place and clicking Save renames it
+        # (removes the old key) instead of creating a duplicate entry.
+        self.loaded_profile_name = None
+
+        self.active_tab = "RGB Editor"
+        self.sidebar_buttons = {}
 
     # ---- derived state ----
 
@@ -127,13 +132,12 @@ class ArgbApp:
         ui.query("body").style(f"background-color: {BG}")
 
         self._build_header()
+        self._build_profile_bar()
 
-        with ui.column().classes("w-full max-w-2xl mx-auto p-6 gap-4"):
-            self._build_mode_card()
-            self.zones_section()
-            self.anim_section()
-            self._build_profiles_card()
-            self._build_apply_row()
+        with ui.row().classes("w-full gap-0 items-stretch").style("min-height: calc(100vh - 112px)"):
+            self._build_sidebar()
+            with ui.column().classes("flex-1 p-6 gap-4 max-w-2xl"):
+                self.main_panel()
 
     def _build_header(self):
         with ui.header().classes(
@@ -154,6 +158,60 @@ class ArgbApp:
         path = self.config_data.get("module_path", "")
         return path if path else "Module folder not set"
 
+    def _build_profile_bar(self):
+        with ui.row().classes(
+            "w-full items-center gap-3 px-6 py-2 border-b border-white/10"
+        ).style(f"background-color: {PANEL}"):
+            ui.label("Profile:").classes("text-sm opacity-70")
+            self.profile_select = ui.select(
+                options=list(self.profiles.keys()), with_input=True, on_change=self._on_profile_change
+            ).classes("w-56").props(
+                "outlined dense use-input fill-input hide-selected input-debounce=0 "
+                'new-value-mode="add-unique"'
+            )
+            ui.button("Apply", on_click=self.apply).props("unelevated color=primary dense")
+            ui.button("Save", on_click=self.save_profile).props("flat dense")
+            ui.button("Delete", on_click=self.delete_profile).props("flat dense color=negative")
+
+    def _build_sidebar(self):
+        with ui.column().classes("gap-1 p-3 w-48 border-r border-white/10").style(
+            f"background-color: {SIDEBAR}"
+        ):
+            for tab in TABS:
+                btn = ui.button(tab, on_click=lambda t=tab: self._select_tab(t)).props(
+                    "flat align=left no-caps"
+                ).classes("w-full justify-start")
+                self.sidebar_buttons[tab] = btn
+            self._refresh_sidebar_styles()
+
+    def _refresh_sidebar_styles(self):
+        for tab, btn in self.sidebar_buttons.items():
+            if tab == self.active_tab:
+                btn.style(f"background-color: {SIDEBAR_ACTIVE}; color: {ACCENT}; border-radius: 8px;")
+            else:
+                btn.style("background-color: transparent; color: inherit; border-radius: 8px;")
+
+    def _select_tab(self, tab):
+        self.active_tab = tab
+        self._refresh_sidebar_styles()
+        self.main_panel.refresh()
+
+    @ui.refreshable
+    def main_panel(self):
+        if self.active_tab == "RGB Editor":
+            self._build_mode_card()
+            self.zones_section()
+            self.anim_section()
+        else:
+            self._build_info_panel()
+
+    def _build_info_panel(self):
+        with ui.card().classes("w-full").style(f"background-color: {PANEL}"):
+            ui.label("Info").classes("text-sm font-semibold opacity-70")
+            ui.label(
+                "Add usage notes, troubleshooting tips, or anything else here."
+            ).classes("text-sm opacity-50 mt-2")
+
     def _build_mode_card(self):
         with ui.card().classes("w-full").style(f"background-color: {PANEL}"):
             ui.label("Mode & Brightness").classes("text-sm font-semibold opacity-70")
@@ -165,33 +223,13 @@ class ArgbApp:
                 min=0, max=100, value=self.brightness, on_change=self._on_brightness_change
             ).props("label-always")
 
-    # ---- dirty tracking (replaces the old profile_select-clearing approach) ----
-
-    def _mark_dirty(self):
-        if self._loading_profile:
-            return
-        self.profile_dirty = True
-        self._refresh_update_button()
-
-    def _refresh_update_button(self):
-        if self.update_profile_btn is None:
-            return
-        if self.editing_profile_name:
-            suffix = " *" if self.profile_dirty else ""
-            self.update_profile_btn.text = f"Update{suffix}"
-            self.update_profile_btn.set_visibility(True)
-        else:
-            self.update_profile_btn.set_visibility(False)
-
     def _on_mode_change(self, e):
         self.mode = e.value
-        self._mark_dirty()
         self.zones_section.refresh()
         self.anim_section.refresh()
 
     def _on_brightness_change(self, e):
         self.brightness = int(e.value)
-        self._mark_dirty()
 
     @ui.refreshable
     def zones_section(self):
@@ -228,18 +266,15 @@ class ArgbApp:
         self.same_color = e.value
         if self.same_color:
             self.zone_colors = [self.zone_colors[0]] * 4
-        self._mark_dirty()
         self.zones_section.refresh()
 
     def _set_all_zone_colors(self, e):
         self.zone_colors = [e.value] * 4
-        self._mark_dirty()
         if self.same_circle is not None:
             self.same_circle.style(f"background-color: {e.value}")
 
     def _set_zone_color(self, i, value):
         self.zone_colors[i] = value
-        self._mark_dirty()
         if i < len(self.zone_circles):
             self.zone_circles[i].style(f"background-color: {value}")
 
@@ -271,29 +306,16 @@ class ArgbApp:
 
     def _set_global_color(self, e):
         self.global_color = e.value
-        self._mark_dirty()
         if self.global_circle is not None:
             self.global_circle.style(f"background-color: {e.value}")
 
     def _on_speed_change(self, e):
         self.speed = int(e.value)
-        self._mark_dirty()
 
     def _on_direction_change(self, e):
         self.direction = e.value
-        self._mark_dirty()
 
-    def _build_profiles_card(self):
-        with ui.card().classes("w-full").style(f"background-color: {PANEL}"):
-            ui.label("Profiles").classes("text-sm font-semibold opacity-70")
-            with ui.row().classes("w-full items-center gap-2"):
-                self.profile_select = ui.select(
-                    options=list(self.profiles.keys()), on_change=self._on_profile_selected
-                ).classes("flex-1").props("outlined dense")
-                ui.button("Save As...", on_click=self._save_profile_dialog).props("flat")
-                self.update_profile_btn = ui.button("Update", on_click=self._update_profile).props("flat")
-                self.update_profile_btn.set_visibility(False)
-                ui.button("Delete", on_click=self._delete_profile).props("flat color=negative")
+    # ---- profiles ----
 
     def _current_settings(self):
         return {
@@ -312,75 +334,62 @@ class ArgbApp:
             "border: 1px solid rgba(255,255,255,0.3); flex-shrink: 0;"
         )
 
-    async def _save_profile_dialog(self):
-        with ui.dialog() as dialog, ui.card():
-            ui.label("Profile name")
-            name_input = ui.input().classes("w-full")
-            with ui.row().classes("justify-end w-full"):
-                ui.button("Cancel", on_click=dialog.close).props("flat")
-                ui.button("Save", on_click=lambda: dialog.submit(name_input.value))
-        name = await dialog
+    def _on_profile_change(self, e):
+        name = e.value
+        # Only treat this as "loading a profile" if it's an existing, DIFFERENT
+        # saved name. Free typing (renaming in place) shouldn't reload settings
+        # or lose track of which profile we started editing from.
+        if name and name in self.profiles and name != self.loaded_profile_name:
+            settings = self.profiles[name]
+            self._loading_profile = True
+            try:
+                self.zone_colors = settings.get("zone_colors", [DEFAULT_ZONE_COLOR] * 4)
+                self.global_color = settings.get("global_color", DEFAULT_ZONE_COLOR)
+                self.same_color = settings.get("same_color", True)
+                self.mode = settings.get("mode", "Static Color")
+                self.brightness = settings.get("brightness", 100)
+                self.speed = settings.get("speed", 4)
+                self.direction = settings.get("direction", 1)
+                self.mode_select.value = self.mode
+                self.brightness_slider.value = self.brightness
+                self.zones_section.refresh()
+                self.anim_section.refresh()
+            finally:
+                self._loading_profile = False
+            self.loaded_profile_name = name
+            ui.notify(f"Loaded profile '{name}'.")
+
+    def save_profile(self):
+        name = (self.profile_select.value or "").strip()
         if not name:
+            ui.notify("Type a profile name first.", type="negative")
             return
+        # Renaming: if the field started from a different existing profile,
+        # remove the old entry so we don't leave a duplicate behind.
+        if self.loaded_profile_name and self.loaded_profile_name != name and self.loaded_profile_name in self.profiles:
+            del self.profiles[self.loaded_profile_name]
         self.profiles[name] = self._current_settings()
         save_json(PROFILES_FILE, self.profiles)
+        self.loaded_profile_name = name
         self.profile_select.options = list(self.profiles.keys())
         self.profile_select.value = name
         self.profile_select.update()
         ui.notify(f"Saved profile '{name}'.", type="positive")
 
-    def _on_profile_selected(self, e):
-        name = e.value
-        if name is None:
-            self.editing_profile_name = None
-            self.profile_dirty = False
-            self._refresh_update_button()
-            return
-        settings = self.profiles.get(name)
-        if not settings:
-            return
-        self._loading_profile = True
-        try:
-            self.zone_colors = settings.get("zone_colors", [DEFAULT_ZONE_COLOR] * 4)
-            self.global_color = settings.get("global_color", DEFAULT_ZONE_COLOR)
-            self.same_color = settings.get("same_color", True)
-            self.mode = settings.get("mode", "Static Color")
-            self.brightness = settings.get("brightness", 100)
-            self.speed = settings.get("speed", 4)
-            self.direction = settings.get("direction", 1)
-            self.mode_select.value = self.mode
-            self.brightness_slider.value = self.brightness
-            self.zones_section.refresh()
-            self.anim_section.refresh()
-        finally:
-            self._loading_profile = False
-        self.editing_profile_name = name
-        self.profile_dirty = False
-        self._refresh_update_button()
-        ui.notify(f"Loaded profile '{name}'.")
-
-    def _update_profile(self):
-        name = self.editing_profile_name
-        if not name or name not in self.profiles:
-            return
-        self.profiles[name] = self._current_settings()
-        save_json(PROFILES_FILE, self.profiles)
-        self.profile_dirty = False
-        self._refresh_update_button()
-        ui.notify(f"Updated profile '{name}'.", type="positive")
-
-    def _delete_profile(self):
-        name = self.profile_select.value
+    def delete_profile(self):
+        name = (self.profile_select.value or "").strip()
+        if name not in self.profiles and self.loaded_profile_name in self.profiles:
+            name = self.loaded_profile_name
         if name in self.profiles:
             del self.profiles[name]
             save_json(PROFILES_FILE, self.profiles)
             self.profile_select.options = list(self.profiles.keys())
             self.profile_select.value = None
             self.profile_select.update()
+            self.loaded_profile_name = None
             ui.notify(f"Deleted profile '{name}'.")
-
-    def _build_apply_row(self):
-        ui.button("Apply", on_click=self.apply).classes("w-full").props("color=primary size=lg")
+        else:
+            ui.notify("No matching profile to delete.", type="negative")
 
     async def apply(self):
         script = self.facer_script_path()
@@ -467,7 +476,7 @@ if __name__ in {"__main__", "__mp_main__"}:
     ui.run(
         title="ARGB",
         native=NATIVE_AVAILABLE,
-        window_size=(620, 780) if NATIVE_AVAILABLE else None,
+        window_size=(900, 720) if NATIVE_AVAILABLE else None,
         reload=False,
         show=True,
         dark=True,
